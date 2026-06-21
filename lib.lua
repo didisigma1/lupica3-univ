@@ -95,9 +95,9 @@ local function clickEffect(options)
 end
 
 function Library:Toggle(value)
-    if game:GetServer("CoreGui"):FindFirstChild("Neverlose") == nil then return end
-    enabled = (type(value) == "boolean" and value) or game:GetServer("CoreGui"):FindFirstChild("Neverlose").Enabled
-    game:GetServer("CoreGui"):FindFirstChild("Neverlose").Enabled = not enabled
+    if game:GetService("CoreGui"):FindFirstChild("Neverlose") == nil then return end
+    enabled = (type(value) == "boolean" and value) or game:GetService("CoreGui"):FindFirstChild("Neverlose").Enabled
+    game:GetService("CoreGui"):FindFirstChild("Neverlose").Enabled = not enabled
 end
 
 function Library:Window(options)
@@ -181,29 +181,6 @@ function Library:Window(options)
     Title.TextColor3 = Color3.fromRGB(234, 239, 245)
     Title.TextSize = 28.000
     Title.TextWrapped = true
-
-    --[[saveBtn.Name = "saveBtn"
-    saveBtn.Parent = TopBar
-    saveBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-    saveBtn.BackgroundColor3 = Color3.fromRGB(9, 8, 13)
-    saveBtn.Position = UDim2.new(0.146918148, 0, 0.479591846, 0)
-    saveBtn.Size = UDim2.new(0, 88, 0, 20)
-    saveBtn.AutoButtonColor = false
-    saveBtn.Font = Enum.Font.GothamBold
-    saveBtn.Text = "   Save"
-    saveBtn.TextColor3 = Color3.fromRGB(132, 146, 153)
-    saveBtn.TextSize = 14.000
-
-    saveLabel.Name = "saveLabel"
-    saveLabel.Parent = saveBtn
-    saveLabel.BackgroundColor3 = Color3.fromRGB(234, 239, 245)
-    saveLabel.BackgroundTransparency = 1.000
-    saveLabel.BorderSizePixel = 0
-    saveLabel.Position = UDim2.new(0.0862553269, 0, 0.0500000007, 0)
-    saveLabel.Size = UDim2.new(0, 18, 0, 18)
-    saveLabel.Image = "rbxassetid://7999984136"
-    saveLabel.ImageColor3 = Color3.fromRGB(132, 146, 153)
-    ]]
 
     allPages.Name = "allPages"
     allPages.Parent = Body
@@ -545,8 +522,9 @@ function Library:Window(options)
                     local percentage = 0
                     local step = options.step or 0.01
 
+                    -- POPRAWNIE DZIAŁAJĄCA FUNKCJA SNAP
                     local function snap(number, factor)
-                        if factor == 0 then
+                        if factor == 0 or factor == nil then
                             return number
                         end
                         return math.floor(number / factor + 0.5) * factor
@@ -618,15 +596,23 @@ function Library:Window(options)
                             local MousePos = UIS:GetMouseLocation().X
                             local FrameSize = sliderFrame.AbsoluteSize.X
                             local FramePos = sliderFrame.AbsolutePosition.X
-                            local pos = snap((MousePos-FramePos)/FrameSize,step)
-                            percentage = math.clamp(pos,0,1)
+                            
+                            -- Oblicz pozycję procentową (0-1)
+                            local pos = (MousePos - FramePos) / FrameSize
+                            pos = math.clamp(pos, 0, 1)
+                            
+                            -- ZAAOKRĄGLIJ DO KROKU
+                            pos = snap(pos, step)
+                            percentage = pos
 
-                            Value = tonumber(options.min) + ((tonumber(options.max) - tonumber(options.min)) * percentage)
+                            -- Oblicz wartość
+                            Value = options.min + ((options.max - options.min) * percentage)
                             Value = round(Value, options.float)
                             Value = math.clamp(Value, options.min, options.max)
+                            
                             sliderTextBox.Text = Value
                             options.callback(Value)
-                            sliderBall.Position = UDim2.new(percentage,0,BtnPos.Y.Scale, BtnPos.Y.Offset)
+                            sliderBall.Position = UDim2.new(percentage, 0, BtnPos.Y.Scale, BtnPos.Y.Offset)
                         end
                     end)
 
@@ -862,7 +848,6 @@ function Library:Window(options)
                 function elements:Colorpicker(options)
                     if not options.text or not options.color or not options.callback then Notify("Colorpicker", "Missing arguments!") return end
 
-
                     local hue, sat, val = Color3.toHSV(options.color)
 
                     local Colorpicker = Instance.new("Frame")
@@ -1085,7 +1070,6 @@ function Library:Window(options)
                         update();
                     end
 
-
                     RGB.MouseButton1Down:Connect(function()
                         WheelDown = true
                         UpdateRing(getmouse.X,getmouse.Y)
@@ -1094,7 +1078,6 @@ function Library:Window(options)
                         SlideDown = true
                         UpdateSlide(getmouse.X,getmouse.Y)
                     end)
-
 
                     UserInputService.InputEnded:Connect(function(input)
                         if input.UserInputType == Enum.UserInputType.MouseButton1 then
