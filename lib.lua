@@ -548,9 +548,8 @@ function Library:Window(options)
                     local function snap(number, factor)
                         if factor == 0 then
                             return number
-                        else
-                            return math.floor(number/factor+0.5)*factor
                         end
+                        return math.floor(number / factor + 0.5) * factor
                     end
 
                     UIS.InputEnded:Connect(function(Mouse)
