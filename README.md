@@ -1,14 +1,11 @@
-
 # lupica3 univ
 
-A roblox universal script with many features:
-
-- we are working on it
+Universal Roblox Script with ESP, Skeleton, and Visual Mods
 
 
-## Authors
+## Overview
 
-- [@didisigma1](https://www.github.com/didisigma1)
+lupica3-univ is a clean and lightweight Roblox script featuring a modern UI with customizable ESP, skeleton rendering, and visual enhancements. Built with the Neverlose UI library.
 
 
 ## Installation
@@ -16,6 +13,9 @@ A roblox universal script with many features:
 Use any executor (tested on Solara), and inject:
 
 ```bash
-  loadstring bllblblb
+  loadstring(game:HttpGet("https://raw.githubusercontent.com/didisigma1/lupica3-univ/refs/heads/main/lupica3-univ.lua"))()
 ```
-    
+## Authors
+
+- [@didisigma1](https://www.github.com/didisigma1)
+
