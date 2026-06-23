@@ -22,6 +22,10 @@ local skeletonTransparency = 1
 local skeletonConnections = {}
 local skeletonRenderConnection = nil
 
+-- ESP Refresh variables
+local espRefreshConnection = nil
+local espRefreshTimer = 0
+
 -- Main window
 local Window = Library:Window({
     text = "lupica3-univ"
@@ -95,8 +99,9 @@ PlayerESPSection:Toggle({
     callback = function(state)
         espEnabled = state
         if state then
-            CreateESP()
+            StartESPRefresh()
         else
+            StopESPRefresh()
             ClearESP()
         end
     end
@@ -108,9 +113,6 @@ PlayerESPSection:Toggle({
     state = false,
     callback = function(state)
         teamCheckEnabled = state
-        if espEnabled then
-            RefreshESP()
-        end
     end
 })
 
@@ -124,9 +126,6 @@ OutlineSection:Toggle({
     state = false,
     callback = function(state)
         showOutline = state
-        if espEnabled then
-            RefreshESP()
-        end
     end
 })
 
@@ -135,9 +134,6 @@ OutlineSection:Colorpicker({
     color = teamOutlineColor,
     callback = function(color)
         teamOutlineColor = color
-        if espEnabled then
-            RefreshESP()
-        end
     end
 })
 
@@ -146,9 +142,6 @@ OutlineSection:Colorpicker({
     color = enemyOutlineColor,
     callback = function(color)
         enemyOutlineColor = color
-        if espEnabled then
-            RefreshESP()
-        end
     end
 })
 
@@ -162,9 +155,6 @@ FillSection:Toggle({
     state = false,
     callback = function(state)
         showFill = state
-        if espEnabled then
-            RefreshESP()
-        end
     end
 })
 
@@ -173,9 +163,6 @@ FillSection:Colorpicker({
     color = teamFillColor,
     callback = function(color)
         teamFillColor = color
-        if espEnabled then
-            RefreshESP()
-        end
     end
 })
 
@@ -184,9 +171,6 @@ FillSection:Colorpicker({
     color = enemyFillColor,
     callback = function(color)
         enemyFillColor = color
-        if espEnabled then
-            RefreshESP()
-        end
     end
 })
 
@@ -200,9 +184,6 @@ NicknameSection:Toggle({
     state = false,
     callback = function(state)
         showNicknames = state
-        if espEnabled then
-            RefreshESP()
-        end
     end
 })
 
@@ -211,9 +192,6 @@ NicknameSection:Colorpicker({
     color = nicknameColor,
     callback = function(color)
         nicknameColor = color
-        if espEnabled then
-            RefreshESP()
-        end
     end
 })
 
@@ -227,9 +205,6 @@ HealthSection:Toggle({
     state = false,
     callback = function(state)
         showHealth = state
-        if espEnabled then
-            RefreshESP()
-        end
     end
 })
 
@@ -475,140 +450,100 @@ function StopSkeletonESP()
 end
 
 -- ==================== PLAYER ESP FUNCTIONS ====================
-function CreateESP()
-    ClearESP()
+function CreatePlayerESP(targetPlayer)
+    if targetPlayer == player then return end
+    if not targetPlayer.Character then return end
+    local humanoid = targetPlayer.Character:FindFirstChild("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return end
     
-    local function CreatePlayerESP(targetPlayer)
-        if targetPlayer == player then return end
-        if not targetPlayer.Character then return end
-        if not targetPlayer.Character:FindFirstChild("Humanoid") then return end
-        if targetPlayer.Character.Humanoid.Health <= 0 then return end
-        
-        local isTeam = false
-        if teamCheckEnabled and player.Team and targetPlayer.Team and player.Team == targetPlayer.Team then
-            isTeam = true
-        end
-        
-        local outlineColor = isTeam and teamOutlineColor or enemyOutlineColor
-        local fillColor = isTeam and teamFillColor or enemyFillColor
-        
-        -- Highlight (GLOW)
-        local highlight = Instance.new("Highlight")
-        highlight.Adornee = targetPlayer.Character
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        highlight.FillColor = showFill and fillColor or Color3.fromRGB(0, 0, 0)
-        highlight.FillTransparency = showFill and 0.5 or 1
-        highlight.OutlineColor = showOutline and outlineColor or Color3.fromRGB(0, 0, 0)
-        highlight.OutlineTransparency = showOutline and 0.3 or 1
-        highlight.Parent = targetPlayer.Character
-        
-        -- Name Tag
-        local nameTag = nil
-        if showNicknames then
-            nameTag = Instance.new("BillboardGui")
-            nameTag.Adornee = targetPlayer.Character:FindFirstChild("Head") or targetPlayer.Character
-            nameTag.Size = UDim2.new(0, 200, 0, 40)
-            nameTag.StudsOffset = Vector3.new(0, 3.5, 0)
-            nameTag.AlwaysOnTop = true
-            nameTag.Parent = targetPlayer.Character
-            
-            local nameLabel = Instance.new("TextLabel")
-            nameLabel.Parent = nameTag
-            nameLabel.Size = UDim2.new(1, 0, 1, 0)
-            nameLabel.BackgroundTransparency = 1
-            nameLabel.Text = targetPlayer.Name
-            nameLabel.TextColor3 = nicknameColor
-            nameLabel.TextSize = 16
-            nameLabel.Font = Enum.Font.GothamBold
-            nameLabel.TextStrokeTransparency = 0.2
-            nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        end
-        
-        -- Health Bar
-        local healthBar = nil
-        local healthConnection = nil
-        if showHealth then
-            healthBar = Instance.new("BillboardGui")
-            healthBar.Adornee = targetPlayer.Character
-            healthBar.Size = UDim2.new(0, 60, 0, 6)
-            healthBar.StudsOffset = Vector3.new(0, -2.8, 0)
-            healthBar.AlwaysOnTop = true
-            healthBar.Parent = targetPlayer.Character
-            
-            local healthFrame = Instance.new("Frame")
-            healthFrame.Parent = healthBar
-            healthFrame.Size = UDim2.new(1, 0, 1, 0)
-            healthFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-            healthFrame.BorderSizePixel = 0
-            
-            local healthFill = Instance.new("Frame")
-            healthFill.Parent = healthFrame
-            healthFill.Size = UDim2.new(1, 0, 1, 0)
-            healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            healthFill.BorderSizePixel = 0
-            
-            local humanoid = targetPlayer.Character.Humanoid
-            local updateHealth = function()
-                if not humanoid or not healthFill then return end
-                local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
-                healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
-                
-                if healthPercent > 0.5 then
-                    healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-                elseif healthPercent > 0.25 then
-                    healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
-                else
-                    healthFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-                end
-            end
-            
-            updateHealth()
-            healthConnection = humanoid:GetPropertyChangedSignal("Health"):Connect(updateHealth)
-        end
-        
-        local espData = {
-            highlight = highlight,
-            nameTag = nameTag,
-            healthBar = healthBar,
-            healthConnection = healthConnection,
-            player = targetPlayer
-        }
-        table.insert(espObjects, espData)
+    local isTeam = false
+    if teamCheckEnabled and player.Team and targetPlayer.Team and player.Team == targetPlayer.Team then
+        isTeam = true
     end
     
-    for _, targetPlayer in pairs(game.Players:GetPlayers()) do
-        CreatePlayerESP(targetPlayer)
+    local outlineColor = isTeam and teamOutlineColor or enemyOutlineColor
+    local fillColor = isTeam and teamFillColor or enemyFillColor
+    
+    -- Highlight (GLOW)
+    local highlight = Instance.new("Highlight")
+    highlight.Adornee = targetPlayer.Character
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.FillColor = showFill and fillColor or Color3.fromRGB(0, 0, 0)
+    highlight.FillTransparency = showFill and 0.5 or 1
+    highlight.OutlineColor = showOutline and outlineColor or Color3.fromRGB(0, 0, 0)
+    highlight.OutlineTransparency = showOutline and 0.3 or 1
+    highlight.Parent = targetPlayer.Character
+    
+    -- Name Tag
+    local nameTag = nil
+    if showNicknames then
+        nameTag = Instance.new("BillboardGui")
+        nameTag.Adornee = targetPlayer.Character:FindFirstChild("Head") or targetPlayer.Character
+        nameTag.Size = UDim2.new(0, 200, 0, 40)
+        nameTag.StudsOffset = Vector3.new(0, 3.5, 0)
+        nameTag.AlwaysOnTop = true
+        nameTag.Parent = targetPlayer.Character
+        
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Parent = nameTag
+        nameLabel.Size = UDim2.new(1, 0, 1, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = targetPlayer.Name
+        nameLabel.TextColor3 = nicknameColor
+        nameLabel.TextSize = 16
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextStrokeTransparency = 0.2
+        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     end
     
-    local playerAddedConnection = game.Players.PlayerAdded:Connect(function(newPlayer)
-        task.wait(0.5)
-        if espEnabled then
-            CreatePlayerESP(newPlayer)
-        end
-    end)
-    table.insert(connections, playerAddedConnection)
-    
-    local characterAddedConnection = game.Players.PlayerAdded:Connect(function(newPlayer)
-        newPlayer.CharacterAdded:Connect(function(character)
-            task.wait(0.5)
-            if espEnabled then
-                for i, espData in ipairs(espObjects) do
-                    if espData.player == newPlayer then
-                        pcall(function()
-                            if espData.highlight then espData.highlight:Destroy() end
-                            if espData.nameTag then espData.nameTag:Destroy() end
-                            if espData.healthBar then espData.healthBar:Destroy() end
-                            if espData.healthConnection then espData.healthConnection:Disconnect() end
-                        end)
-                        table.remove(espObjects, i)
-                        break
-                    end
-                end
-                CreatePlayerESP(newPlayer)
+    -- Health Bar
+    local healthBar = nil
+    local healthConnection = nil
+    if showHealth then
+        healthBar = Instance.new("BillboardGui")
+        healthBar.Adornee = targetPlayer.Character
+        healthBar.Size = UDim2.new(0, 60, 0, 6)
+        healthBar.StudsOffset = Vector3.new(0, -2.8, 0)
+        healthBar.AlwaysOnTop = true
+        healthBar.Parent = targetPlayer.Character
+        
+        local healthFrame = Instance.new("Frame")
+        healthFrame.Parent = healthBar
+        healthFrame.Size = UDim2.new(1, 0, 1, 0)
+        healthFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        healthFrame.BorderSizePixel = 0
+        
+        local healthFill = Instance.new("Frame")
+        healthFill.Parent = healthFrame
+        healthFill.Size = UDim2.new(1, 0, 1, 0)
+        healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        healthFill.BorderSizePixel = 0
+        
+        local updateHealth = function()
+            if not humanoid or not healthFill then return end
+            local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
+            healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+            
+            if healthPercent > 0.5 then
+                healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            elseif healthPercent > 0.25 then
+                healthFill.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+            else
+                healthFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
             end
-        end)
-    end)
-    table.insert(connections, characterAddedConnection)
+        end
+        
+        updateHealth()
+        healthConnection = humanoid:GetPropertyChangedSignal("Health"):Connect(updateHealth)
+    end
+    
+    table.insert(espObjects, {
+        highlight = highlight,
+        nameTag = nameTag,
+        healthBar = healthBar,
+        healthConnection = healthConnection,
+        player = targetPlayer
+    })
 end
 
 function ClearESP()
@@ -623,11 +558,45 @@ function ClearESP()
     espObjects = {}
 end
 
-function RefreshESP()
-    if espEnabled then
-        ClearESP()
-        CreateESP()
+-- ==================== ESP REFRESH SYSTEM ====================
+function StartESPRefresh()
+    StopESPRefresh()
+    
+    -- Najpierw stwórz ESP dla wszystkich
+    for _, plr in pairs(game.Players:GetPlayers()) do
+        if plr ~= player then
+            CreatePlayerESP(plr)
+        end
     end
+    
+    -- Co 0.5 sekundy odświeżaj (zmniejszone z 0.1 na 0.5 żeby mniej lagowało)
+    espRefreshConnection = game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
+        if not espEnabled then return end
+        
+        espRefreshTimer = espRefreshTimer + deltaTime
+        if espRefreshTimer >= 0.5 then -- Odświeżaj co 0.5 sekundy
+            espRefreshTimer = 0
+            
+            -- Usuń stare ESP
+            ClearESP()
+            
+            -- Stwórz nowe ESP dla wszystkich żywych graczy
+            for _, plr in pairs(game.Players:GetPlayers()) do
+                if plr ~= player then
+                    CreatePlayerESP(plr)
+                end
+            end
+        end
+    end)
+    table.insert(connections, espRefreshConnection)
+end
+
+function StopESPRefresh()
+    if espRefreshConnection then
+        espRefreshConnection:Disconnect()
+        espRefreshConnection = nil
+    end
+    espRefreshTimer = 0
 end
 
 -- ==================== MISC TAB ====================
@@ -648,6 +617,7 @@ MiscSection:Button({
         isUnloaded = true
         
         espEnabled = false
+        StopESPRefresh()
         ClearESP()
         StopSkeletonESP()
         
