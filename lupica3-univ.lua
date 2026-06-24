@@ -25,6 +25,73 @@ local skeletonRenderConnection = nil
 -- ESP Refresh variables
 local espRefreshConnection = nil
 local espRefreshTimer = 0
+local espRefreshInterval = 0.8
+
+-- Watermark variables
+local watermarkEnabled = false
+local watermarkColor = Color3.fromRGB(255, 255, 255)
+local watermarkUnlocked = false
+local watermarkGui = nil
+local watermarkFrame = nil
+local watermarkTextLabel = nil
+local watermarkUpdateConnection = nil
+local watermarkPosition = UDim2.new(0.02, 0, 0.02, 0)
+local watermarkSizeConnection = nil
+
+-- ==================== FUNKCJA DRAGIFY Z LIB.LUA ====================
+local function WatermarkDragify(frame, parent)
+    parent = parent or frame
+
+    local dragging = false
+    local dragInput, mousePos, framePos
+
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if watermarkEnabled and watermarkUnlocked then
+                dragging = true
+                mousePos = input.Position
+                framePos = parent.Position
+
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
+                end)
+            end
+        end
+    end)
+
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - mousePos
+            parent.Position = UDim2.new(
+                framePos.X.Scale,
+                framePos.X.Offset + delta.X,
+                framePos.Y.Scale,
+                framePos.Y.Offset + delta.Y
+            )
+            watermarkPosition = parent.Position
+        end
+    end)
+end
+
+-- ==================== FUNKCJA DO NATYCHMIASTOWEJ AKTUALIZACJI ESP ====================
+function RefreshESPNOW()
+    if espEnabled then
+        ClearESP()
+        for _, plr in pairs(game.Players:GetPlayers()) do
+            if plr ~= player then
+                CreatePlayerESP(plr)
+            end
+        end
+    end
+end
 
 -- Main window
 local Window = Library:Window({
@@ -35,6 +102,33 @@ local Window = Library:Window({
 local TabSection = Window:TabSection({
     text = "Menu"
 })
+
+-- ==================== ZMIANA STYLU NA CIEMNY SZARO-CZARNY ====================
+task.wait(0.1)
+pcall(function()
+    for _, v in pairs(game.CoreGui:GetDescendants()) do
+        if v:IsA("Frame") or v:IsA("TextLabel") or v:IsA("TextButton") then
+            if v.Name == "Body" then
+                v.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
+            elseif v.Name == "SideBar" then
+                v.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+            elseif v.Name == "sectionFrame" then
+                v.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+            elseif v.Name == "sbLine" or v.Name == "tbLine" or v.Name == "sLine" then
+                v.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+            elseif v:IsA("TextLabel") and v.Name == "Title" then
+                v.TextColor3 = Color3.fromRGB(220, 220, 230)
+            elseif v:IsA("TextButton") and v.Name == "tabButton" then
+                v.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+                v.TextColor3 = Color3.fromRGB(200, 200, 210)
+            elseif v:IsA("TextLabel") and v.Name == "sectionLabel" then
+                v.TextColor3 = Color3.fromRGB(200, 200, 210)
+            elseif v:IsA("TextLabel") and v.Name == "tabSectionLabel" then
+                v.TextColor3 = Color3.fromRGB(130, 130, 140)
+            end
+        end
+    end
+end)
 
 -- VISUALS TAB
 local VisualsTab = TabSection:Tab({
@@ -113,6 +207,7 @@ PlayerESPSection:Toggle({
     state = false,
     callback = function(state)
         teamCheckEnabled = state
+        RefreshESPNOW() -- Natychmiastowa aktualizacja
     end
 })
 
@@ -126,6 +221,7 @@ OutlineSection:Toggle({
     state = false,
     callback = function(state)
         showOutline = state
+        RefreshESPNOW() -- Natychmiastowa aktualizacja
     end
 })
 
@@ -134,6 +230,7 @@ OutlineSection:Colorpicker({
     color = teamOutlineColor,
     callback = function(color)
         teamOutlineColor = color
+        RefreshESPNOW() -- Natychmiastowa aktualizacja
     end
 })
 
@@ -142,6 +239,7 @@ OutlineSection:Colorpicker({
     color = enemyOutlineColor,
     callback = function(color)
         enemyOutlineColor = color
+        RefreshESPNOW() -- Natychmiastowa aktualizacja
     end
 })
 
@@ -155,6 +253,7 @@ FillSection:Toggle({
     state = false,
     callback = function(state)
         showFill = state
+        RefreshESPNOW() -- Natychmiastowa aktualizacja
     end
 })
 
@@ -163,6 +262,7 @@ FillSection:Colorpicker({
     color = teamFillColor,
     callback = function(color)
         teamFillColor = color
+        RefreshESPNOW() -- Natychmiastowa aktualizacja
     end
 })
 
@@ -171,6 +271,7 @@ FillSection:Colorpicker({
     color = enemyFillColor,
     callback = function(color)
         enemyFillColor = color
+        RefreshESPNOW() -- Natychmiastowa aktualizacja
     end
 })
 
@@ -184,6 +285,7 @@ NicknameSection:Toggle({
     state = false,
     callback = function(state)
         showNicknames = state
+        RefreshESPNOW() -- Natychmiastowa aktualizacja
     end
 })
 
@@ -192,6 +294,7 @@ NicknameSection:Colorpicker({
     color = nicknameColor,
     callback = function(color)
         nicknameColor = color
+        RefreshESPNOW() -- Natychmiastowa aktualizacja
     end
 })
 
@@ -205,6 +308,7 @@ HealthSection:Toggle({
     state = false,
     callback = function(state)
         showHealth = state
+        RefreshESPNOW() -- Natychmiastowa aktualizacja
     end
 })
 
@@ -562,30 +666,19 @@ end
 function StartESPRefresh()
     StopESPRefresh()
     
-    -- Najpierw stwórz ESP dla wszystkich
     for _, plr in pairs(game.Players:GetPlayers()) do
         if plr ~= player then
             CreatePlayerESP(plr)
         end
     end
     
-    -- Co 0.5 sekundy odświeżaj (zmniejszone z 0.1 na 0.5 żeby mniej lagowało)
     espRefreshConnection = game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
         if not espEnabled then return end
         
         espRefreshTimer = espRefreshTimer + deltaTime
-        if espRefreshTimer >= 0.5 then -- Odświeżaj co 0.5 sekundy
+        if espRefreshTimer >= espRefreshInterval then
             espRefreshTimer = 0
-            
-            -- Usuń stare ESP
-            ClearESP()
-            
-            -- Stwórz nowe ESP dla wszystkich żywych graczy
-            for _, plr in pairs(game.Players:GetPlayers()) do
-                if plr ~= player then
-                    CreatePlayerESP(plr)
-                end
-            end
+            RefreshESPNOW()
         end
     end)
     table.insert(connections, espRefreshConnection)
@@ -599,18 +692,170 @@ function StopESPRefresh()
     espRefreshTimer = 0
 end
 
+-- ==================== WATERMARK SYSTEM ====================
+function UpdateWatermarkSize()
+    if not watermarkTextLabel or not watermarkFrame then return end
+    
+    local textBounds = watermarkTextLabel.TextBounds
+    local padding = 20
+    
+    local width = math.max(textBounds.X + padding, 180)
+    local height = math.max(textBounds.Y + padding, 70)
+    
+    watermarkFrame.Size = UDim2.new(0, width, 0, height)
+end
+
+function CreateWatermark()
+    if watermarkGui then
+        DestroyWatermark()
+    end
+    
+    watermarkGui = Instance.new("ScreenGui")
+    watermarkGui.Name = "Watermark"
+    watermarkGui.Parent = game.CoreGui
+    watermarkGui.ResetOnSpawn = false
+    watermarkGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    watermarkFrame = Instance.new("Frame")
+    watermarkFrame.Name = "WatermarkFrame"
+    watermarkFrame.Parent = watermarkGui
+    watermarkFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    watermarkFrame.BackgroundTransparency = 0.5
+    watermarkFrame.BorderSizePixel = 0
+    watermarkFrame.Size = UDim2.new(0, 300, 0, 120)
+    watermarkFrame.Position = watermarkPosition
+    watermarkFrame.Active = true
+    watermarkFrame.Draggable = false
+    
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 6)
+    frameCorner.Parent = watermarkFrame
+    
+    watermarkTextLabel = Instance.new("TextLabel")
+    watermarkTextLabel.Name = "WatermarkText"
+    watermarkTextLabel.Parent = watermarkFrame
+    watermarkTextLabel.Size = UDim2.new(1, -20, 1, -20)
+    watermarkTextLabel.Position = UDim2.new(0, 10, 0, 10)
+    watermarkTextLabel.BackgroundTransparency = 1
+    watermarkTextLabel.TextColor3 = watermarkColor
+    watermarkTextLabel.TextSize = 14
+    watermarkTextLabel.Font = Enum.Font.Gotham
+    watermarkTextLabel.TextXAlignment = Enum.TextXAlignment.Left
+    watermarkTextLabel.TextYAlignment = Enum.TextYAlignment.Top
+    watermarkTextLabel.TextWrapped = false
+    watermarkTextLabel.Text = ""
+    
+    WatermarkDragify(watermarkFrame, watermarkFrame)
+    
+    UpdateWatermarkText()
+    
+    watermarkSizeConnection = watermarkTextLabel:GetPropertyChangedSignal("Text"):Connect(function()
+        UpdateWatermarkSize()
+    end)
+    table.insert(connections, watermarkSizeConnection)
+    
+    watermarkUpdateConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if watermarkEnabled then
+            UpdateWatermarkText()
+        end
+    end)
+    table.insert(connections, watermarkUpdateConnection)
+end
+
+function UpdateWatermarkText()
+    if not watermarkTextLabel then return end
+    
+    local placeName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "Unknown"
+    local playerCount = #game.Players:GetPlayers()
+    local fps = math.floor(1 / (game:GetService("RunService").Heartbeat:Wait() or 0.001))
+    local currentTime = os.date("%H:%M:%S")
+    local currentDate = os.date("%d/%m/%Y")
+    
+    watermarkTextLabel.Text = string.format(
+        "lupica3-univ\n%s\nPlayers: %d | FPS: %d\n%s | %s",
+        placeName,
+        playerCount,
+        fps,
+        currentTime,
+        currentDate
+    )
+    
+    UpdateWatermarkSize()
+end
+
+function DestroyWatermark()
+    if watermarkUpdateConnection then
+        watermarkUpdateConnection:Disconnect()
+        watermarkUpdateConnection = nil
+    end
+    
+    if watermarkSizeConnection then
+        watermarkSizeConnection:Disconnect()
+        watermarkSizeConnection = nil
+    end
+    
+    if watermarkGui then
+        watermarkGui:Destroy()
+        watermarkGui = nil
+        watermarkFrame = nil
+        watermarkTextLabel = nil
+    end
+end
+
+function ToggleWatermark(state)
+    watermarkEnabled = state
+    if state then
+        CreateWatermark()
+    else
+        DestroyWatermark()
+    end
+end
+
 -- ==================== MISC TAB ====================
 local MiscTab = TabSection:Tab({
     text = "Misc",
     icon = "rbxassetid://7999345313",
 })
 
+-- ==================== WATERMARK SECTION ====================
 local MiscSection = MiscTab:Section({
+    text = "Watermark"
+})
+
+MiscSection:Toggle({
+    text = "Watermark",
+    state = false,
+    callback = function(state)
+        ToggleWatermark(state)
+    end
+})
+
+MiscSection:Toggle({
+    text = "Unlocked",
+    state = false,
+    callback = function(state)
+        watermarkUnlocked = state
+    end
+})
+
+MiscSection:Colorpicker({
+    text = "Watermark Color",
+    color = watermarkColor,
+    callback = function(color)
+        watermarkColor = color
+        if watermarkTextLabel then
+            watermarkTextLabel.TextColor3 = watermarkColor
+        end
+    end
+})
+
+-- ==================== MISC OPTIONS ====================
+local MiscOptionsSection = MiscTab:Section({
     text = "Misc Options"
 })
 
 -- Unload
-MiscSection:Button({
+MiscOptionsSection:Button({
     text = "Unload",
     callback = function()
         if isUnloaded then return end
@@ -620,6 +865,7 @@ MiscSection:Button({
         StopESPRefresh()
         ClearESP()
         StopSkeletonESP()
+        ToggleWatermark(false)
         
         for _, connection in ipairs(connections) do
             pcall(function() connection:Disconnect() end)
@@ -630,7 +876,7 @@ MiscSection:Button({
         
         pcall(function()
             for _, v in pairs(game.CoreGui:GetChildren()) do
-                if v:IsA("ScreenGui") and v.Name == "Neverlose" then
+                if v:IsA("ScreenGui") and (v.Name == "Neverlose" or v.Name == "Watermark") then
                     v:Destroy()
                 end
             end
@@ -641,11 +887,12 @@ MiscSection:Button({
 })
 
 -- RightShift to toggle
-game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+local rightShiftConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.RightShift and not isUnloaded then
         Library:Toggle()
     end
 end)
+table.insert(connections, rightShiftConnection)
 
 print("lupica3-univ injected")
