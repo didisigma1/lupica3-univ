@@ -38,6 +38,20 @@ local watermarkUpdateConnection = nil
 local watermarkPosition = UDim2.new(0.02, 0, 0.02, 0)
 local watermarkSizeConnection = nil
 
+-- Combat variables
+local hitboxEnabled = false
+local hitboxSize = 5
+local hitboxConnection = nil
+
+-- Visual Effects variables
+local noFogEnabled = false
+local noShadowsEnabled = false
+local fullBrightEnabled = false
+local fogConnection = nil
+local shadowsConnection = nil
+local fullBrightConnection = nil
+local originalLightingSettings = {}
+
 -- ==================== FUNKCJA DRAGIFY Z LIB.LUA ====================
 local function WatermarkDragify(frame, parent)
     parent = parent or frame
@@ -90,6 +104,87 @@ function RefreshESPNOW()
                 CreatePlayerESP(plr)
             end
         end
+    end
+end
+
+-- ==================== FUNKCJE HITBOX EXPANDER ====================
+function ToggleHitbox(state)
+    hitboxEnabled = state
+    if hitboxConnection then
+        hitboxConnection:Disconnect()
+        hitboxConnection = nil
+    end
+    
+    if state then
+        hitboxConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if not hitboxEnabled then return end
+            for _, plr in pairs(game.Players:GetPlayers()) do
+                if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                    local root = plr.Character.HumanoidRootPart
+                    root.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+                    root.Transparency = 0.8
+                    root.CanCollide = false
+                end
+            end
+        end)
+        table.insert(connections, hitboxConnection)
+    end
+end
+
+function SetHitboxSize(size)
+    hitboxSize = size
+    if hitboxEnabled then
+        for _, plr in pairs(game.Players:GetPlayers()) do
+            if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                local root = plr.Character.HumanoidRootPart
+                root.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+            end
+        end
+    end
+end
+
+-- ==================== FUNKCJE EFEKTÓW WIZUALNYCH ====================
+function ToggleNoFog(state)
+    noFogEnabled = state
+    local lighting = game:GetService("Lighting")
+    
+    if state then
+        lighting.FogEnd = 999999
+        lighting.FogStart = 0
+    else
+        -- Przywróć domyślne wartości (często używane w grach)
+        lighting.FogEnd = 1000
+        lighting.FogStart = 0
+    end
+end
+
+function ToggleNoShadows(state)
+    noShadowsEnabled = state
+    local lighting = game:GetService("Lighting")
+    
+    if state then
+        lighting.ShadowSoftness = 0
+        lighting.Brightness = 2
+        lighting.GlobalShadows = false
+    else
+        lighting.ShadowSoftness = 1
+        lighting.Brightness = 1
+        lighting.GlobalShadows = true
+    end
+end
+
+function ToggleFullBright(state)
+    fullBrightEnabled = state
+    local lighting = game:GetService("Lighting")
+    
+    if state then
+        lighting.Brightness = 10
+        lighting.Ambient = Color3.fromRGB(255, 255, 255)
+        lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+    else
+        lighting.Brightness = 1
+        lighting.Ambient = Color3.fromRGB(127, 127, 127)
+        lighting.OutdoorAmbient = Color3.fromRGB(127, 127, 127)
     end
 end
 
@@ -207,7 +302,7 @@ PlayerESPSection:Toggle({
     state = false,
     callback = function(state)
         teamCheckEnabled = state
-        RefreshESPNOW() -- Natychmiastowa aktualizacja
+        RefreshESPNOW()
     end
 })
 
@@ -221,7 +316,7 @@ OutlineSection:Toggle({
     state = false,
     callback = function(state)
         showOutline = state
-        RefreshESPNOW() -- Natychmiastowa aktualizacja
+        RefreshESPNOW()
     end
 })
 
@@ -230,7 +325,7 @@ OutlineSection:Colorpicker({
     color = teamOutlineColor,
     callback = function(color)
         teamOutlineColor = color
-        RefreshESPNOW() -- Natychmiastowa aktualizacja
+        RefreshESPNOW()
     end
 })
 
@@ -239,7 +334,7 @@ OutlineSection:Colorpicker({
     color = enemyOutlineColor,
     callback = function(color)
         enemyOutlineColor = color
-        RefreshESPNOW() -- Natychmiastowa aktualizacja
+        RefreshESPNOW()
     end
 })
 
@@ -253,7 +348,7 @@ FillSection:Toggle({
     state = false,
     callback = function(state)
         showFill = state
-        RefreshESPNOW() -- Natychmiastowa aktualizacja
+        RefreshESPNOW()
     end
 })
 
@@ -262,7 +357,7 @@ FillSection:Colorpicker({
     color = teamFillColor,
     callback = function(color)
         teamFillColor = color
-        RefreshESPNOW() -- Natychmiastowa aktualizacja
+        RefreshESPNOW()
     end
 })
 
@@ -271,7 +366,7 @@ FillSection:Colorpicker({
     color = enemyFillColor,
     callback = function(color)
         enemyFillColor = color
-        RefreshESPNOW() -- Natychmiastowa aktualizacja
+        RefreshESPNOW()
     end
 })
 
@@ -285,7 +380,7 @@ NicknameSection:Toggle({
     state = false,
     callback = function(state)
         showNicknames = state
-        RefreshESPNOW() -- Natychmiastowa aktualizacja
+        RefreshESPNOW()
     end
 })
 
@@ -294,7 +389,7 @@ NicknameSection:Colorpicker({
     color = nicknameColor,
     callback = function(color)
         nicknameColor = color
-        RefreshESPNOW() -- Natychmiastowa aktualizacja
+        RefreshESPNOW()
     end
 })
 
@@ -308,7 +403,7 @@ HealthSection:Toggle({
     state = false,
     callback = function(state)
         showHealth = state
-        RefreshESPNOW() -- Natychmiastowa aktualizacja
+        RefreshESPNOW()
     end
 })
 
@@ -344,6 +439,37 @@ SkeletonSection:Colorpicker({
                 end
             end
         end
+    end
+})
+
+-- ==================== COMBAT TAB ====================
+local CombatTab = TabSection:Tab({
+    text = "Combat",
+    icon = "rbxassetid://7999345313",
+})
+
+-- ==================== HITBOX EXPANDER ====================
+local HitboxSection = CombatTab:Section({
+    text = "Hitbox Expander"
+})
+
+-- Dropdown z wartościami 1-10
+local hitboxValues = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
+
+HitboxSection:Dropdown({
+    text = "Hitbox Size",
+    list = hitboxValues,
+    default = "5",
+    callback = function(selected)
+        SetHitboxSize(tonumber(selected))
+    end
+})
+
+HitboxSection:Toggle({
+    text = "Hitbox Expander",
+    state = false,
+    callback = function(state)
+        ToggleHitbox(state)
     end
 })
 
@@ -849,6 +975,35 @@ MiscSection:Colorpicker({
     end
 })
 
+-- ==================== VISUAL EFFECTS SECTION ====================
+local VisualEffectsSection = MiscTab:Section({
+    text = "Visual Effects"
+})
+
+VisualEffectsSection:Toggle({
+    text = "No Fog",
+    state = false,
+    callback = function(state)
+        ToggleNoFog(state)
+    end
+})
+
+VisualEffectsSection:Toggle({
+    text = "No Shadows",
+    state = false,
+    callback = function(state)
+        ToggleNoShadows(state)
+    end
+})
+
+VisualEffectsSection:Toggle({
+    text = "FullBright",
+    state = false,
+    callback = function(state)
+        ToggleFullBright(state)
+    end
+})
+
 -- ==================== MISC OPTIONS ====================
 local MiscOptionsSection = MiscTab:Section({
     text = "Misc Options"
@@ -866,6 +1021,10 @@ MiscOptionsSection:Button({
         ClearESP()
         StopSkeletonESP()
         ToggleWatermark(false)
+        ToggleHitbox(false)
+        ToggleNoFog(false)
+        ToggleNoShadows(false)
+        ToggleFullBright(false)
         
         for _, connection in ipairs(connections) do
             pcall(function() connection:Disconnect() end)
@@ -873,6 +1032,7 @@ MiscOptionsSection:Button({
         connections = {}
         ratioConnection = nil
         skeletonRenderConnection = nil
+        hitboxConnection = nil
         
         pcall(function()
             for _, v in pairs(game.CoreGui:GetChildren()) do
