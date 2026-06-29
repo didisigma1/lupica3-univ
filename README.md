@@ -10,6 +10,8 @@ Use any executor (tested on Solara), and inject:
 ```bash
   loadstring(game:HttpGet("https://raw.githubusercontent.com/didisigma1/lupica3scripts/refs/heads/main/lupica3loader.lua"))()
 ```
+then choose what script u want to use from menu
+
 ## Authors
 
 - [@didisigma1](https://www.github.com/didisigma1)
