@@ -8,7 +8,7 @@
 Use any executor (tested on Solara), and inject:
 
 ```bash
-  loadstring(game:HttpGet("https://raw.githubusercontent.com/didisigma1/lupica3-univ/refs/heads/main/lupica3-univ.lua"))()
+  loadstring(game:HttpGet("https://raw.githubusercontent.com/didisigma1/lupica3scripts/refs/heads/main/lupica3loader.lua"))()
 ```
 ## Authors
 
