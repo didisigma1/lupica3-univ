@@ -43,14 +43,35 @@ local hitboxEnabled = false
 local hitboxSize = 5
 local hitboxConnection = nil
 
+-- Aimbot variables
+local aimbotEnabled = false
+local aimbotKey = Enum.KeyCode.E
+local aimbotMode = "Toggle"
+local aimbotTargetPart = "Head"
+local aimbotTeamCheck = false
+local aimbotFOV = 80
+local aimbotFOVColor = Color3.fromRGB(255, 0, 0)
+local aimbotFOVCircle = nil
+local aimbotFOVVisible = false
+local aimbotConnection = nil
+local aimbotRenderConnection = nil
+local aimbotKeyConnections = {}
+
+-- Movement variables
+local infiniteJumpEnabled = false
+local walkSpeed = 16
+
 -- Visual Effects variables
 local noFogEnabled = false
 local noShadowsEnabled = false
 local fullBrightEnabled = false
-local fogConnection = nil
-local shadowsConnection = nil
-local fullBrightConnection = nil
-local originalLightingSettings = {}
+
+-- Config variables
+local configEditorVisible = false
+local configEditorGui = nil
+local configEditorFrame = nil
+local configTextbox = nil
+local configStatusLabel = nil
 
 -- ==================== FUNKCJA DRAGIFY Z LIB.LUA ====================
 local function WatermarkDragify(frame, parent)
@@ -143,6 +164,252 @@ function SetHitboxSize(size)
     end
 end
 
+-- ==================== FUNKCJE AIMBOT ====================
+function CreateAimbotFOV()
+    if aimbotFOVCircle then
+        aimbotFOVCircle:Remove()
+        aimbotFOVCircle = nil
+    end
+    
+    aimbotFOVCircle = Drawing.new("Circle")
+    aimbotFOVCircle.Color = aimbotFOVColor
+    aimbotFOVCircle.Thickness = 2
+    aimbotFOVCircle.Radius = aimbotFOV
+    aimbotFOVCircle.Filled = false
+    aimbotFOVCircle.Visible = aimbotFOVVisible
+    aimbotFOVCircle.Transparency = 0.5
+    aimbotFOVCircle.NumSides = 60
+    aimbotFOVCircle.Position = workspace.CurrentCamera.ViewportSize / 2
+end
+
+function UpdateAimbotFOV()
+    if aimbotFOVCircle then
+        aimbotFOVCircle.Radius = aimbotFOV
+        aimbotFOVCircle.Color = aimbotFOVColor
+        aimbotFOVCircle.Visible = aimbotFOVVisible
+        aimbotFOVCircle.Position = workspace.CurrentCamera.ViewportSize / 2
+    end
+end
+
+function ClearAimbotKeyConnections()
+    for _, conn in ipairs(aimbotKeyConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    aimbotKeyConnections = {}
+end
+
+function ToggleAimbot(state)
+    aimbotEnabled = state
+    
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+        aimbotConnection = nil
+    end
+    
+    if aimbotRenderConnection then
+        aimbotRenderConnection:Disconnect()
+        aimbotRenderConnection = nil
+    end
+    
+    ClearAimbotKeyConnections()
+    
+    if state then
+        CreateAimbotFOV()
+        StartAimbot()
+    else
+        if aimbotFOVCircle then
+            aimbotFOVCircle.Visible = false
+        end
+    end
+end
+
+function StartAimbot()
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+        aimbotConnection = nil
+    end
+    
+    if aimbotRenderConnection then
+        aimbotRenderConnection:Disconnect()
+        aimbotRenderConnection = nil
+    end
+    
+    ClearAimbotKeyConnections()
+    
+    local UserInputService = game:GetService("UserInputService")
+    local Camera = workspace.CurrentCamera
+    local LocalPlayer = game.Players.LocalPlayer
+    
+    local isHolding = false
+    local isToggled = false
+    
+    local beganConn = UserInputService.InputBegan:Connect(function(input, processed)
+        if processed then return end
+        
+        local keyMatches = false
+        if typeof(aimbotKey) == "EnumItem" and input.KeyCode == aimbotKey then
+            keyMatches = true
+        elseif typeof(aimbotKey) == "EnumItem" and input.UserInputType == aimbotKey then
+            keyMatches = true
+        end
+        
+        if keyMatches then
+            if aimbotMode == "Toggle" then
+                isToggled = not isToggled
+            elseif aimbotMode == "Hold" then
+                isHolding = true
+            end
+        end
+    end)
+    table.insert(aimbotKeyConnections, beganConn)
+    
+    local endedConn = UserInputService.InputEnded:Connect(function(input, processed)
+        if processed then return end
+        
+        local keyMatches = false
+        if typeof(aimbotKey) == "EnumItem" and input.KeyCode == aimbotKey then
+            keyMatches = true
+        elseif typeof(aimbotKey) == "EnumItem" and input.UserInputType == aimbotKey then
+            keyMatches = true
+        end
+        
+        if keyMatches and aimbotMode == "Hold" then
+            isHolding = false
+        end
+    end)
+    table.insert(aimbotKeyConnections, endedConn)
+    
+    aimbotRenderConnection = game:GetService("RunService").RenderStepped:Connect(function()
+        local shouldLock = false
+        if aimbotMode == "Toggle" then
+            shouldLock = isToggled and aimbotEnabled
+        elseif aimbotMode == "Hold" then
+            shouldLock = isHolding and aimbotEnabled
+        end
+        
+        if aimbotFOVCircle then
+            aimbotFOVCircle.Position = Camera.ViewportSize / 2
+            aimbotFOVCircle.Visible = aimbotFOVVisible and aimbotEnabled
+        end
+        
+        if not shouldLock then return end
+        
+        local target = nil
+        local closestDistance = aimbotFOV
+        local screenCenter = Camera.ViewportSize / 2
+        
+        for _, plr in pairs(game.Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                local targetPart = plr.Character:FindFirstChild(aimbotTargetPart)
+                local humanoid = plr.Character:FindFirstChild("Humanoid")
+                local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                
+                if targetPart and humanoid and humanoid.Health > 0 and myRoot then
+                    if aimbotTeamCheck and plr.Team == LocalPlayer.Team then
+                        continue
+                    end
+                    
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                    if onScreen then
+                        local distance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+                        if distance < closestDistance then
+                            closestDistance = distance
+                            target = targetPart
+                        end
+                    end
+                end
+            end
+        end
+        
+        if target then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        end
+    end)
+    table.insert(connections, aimbotRenderConnection)
+end
+
+function StopAimbot()
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+        aimbotConnection = nil
+    end
+    
+    if aimbotRenderConnection then
+        aimbotRenderConnection:Disconnect()
+        aimbotRenderConnection = nil
+    end
+    
+    ClearAimbotKeyConnections()
+    
+    if aimbotFOVCircle then
+        aimbotFOVCircle:Remove()
+        aimbotFOVCircle = nil
+    end
+end
+
+-- ==================== FUNKCJE MOVEMENT ====================
+function ToggleInfiniteJump(state)
+    infiniteJumpEnabled = state
+end
+
+function SetWalkSpeed(speed)
+    walkSpeed = speed
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then
+            hum.WalkSpeed = walkSpeed
+        end
+    end
+end
+
+local function SetupInfiniteJump()
+    local UserInputService = game:GetService("UserInputService")
+    local jumpConnection = UserInputService.JumpRequest:Connect(function()
+        if infiniteJumpEnabled then
+            local char = player.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum:ChangeState("Jumping")
+                end
+            end
+        end
+    end)
+    table.insert(connections, jumpConnection)
+end
+
+local function SetupWalkSpeed()
+    local function ApplyWalkSpeed()
+        local char = player.Character
+        if char then
+            local hum = char:FindFirstChild("Humanoid")
+            if hum then
+                hum.WalkSpeed = walkSpeed
+            end
+        end
+    end
+    
+    local charAddedConn = player.CharacterAdded:Connect(function()
+        task.wait(0.1)
+        ApplyWalkSpeed()
+    end)
+    table.insert(connections, charAddedConn)
+    
+    local heartbeatConn = game:GetService("RunService").Heartbeat:Connect(function()
+        if walkSpeed ~= 16 then
+            local char = player.Character
+            if char then
+                local hum = char:FindFirstChild("Humanoid")
+                if hum and hum.WalkSpeed ~= walkSpeed then
+                    hum.WalkSpeed = walkSpeed
+                end
+            end
+        end
+    end)
+    table.insert(connections, heartbeatConn)
+end
+
 -- ==================== FUNKCJE EFEKTÓW WIZUALNYCH ====================
 function ToggleNoFog(state)
     noFogEnabled = state
@@ -152,7 +419,6 @@ function ToggleNoFog(state)
         lighting.FogEnd = 999999
         lighting.FogStart = 0
     else
-        -- Przywróć domyślne wartości (często używane w grach)
         lighting.FogEnd = 1000
         lighting.FogStart = 0
     end
@@ -185,6 +451,398 @@ function ToggleFullBright(state)
         lighting.Brightness = 1
         lighting.Ambient = Color3.fromRGB(127, 127, 127)
         lighting.OutdoorAmbient = Color3.fromRGB(127, 127, 127)
+    end
+end
+
+-- ==================== FUNKCJE SYSTEMU CONFIGÓW ====================
+function GetCurrentConfig()
+    local config = {
+        -- Ratio
+        currentRatio = currentRatio,
+        
+        -- ESP Settings
+        espEnabled = espEnabled,
+        teamCheckEnabled = teamCheckEnabled,
+        showOutline = showOutline,
+        showFill = showFill,
+        showNicknames = showNicknames,
+        showHealth = showHealth,
+        
+        -- ESP Colors
+        teamOutlineColor = {teamOutlineColor.R, teamOutlineColor.G, teamOutlineColor.B},
+        teamFillColor = {teamFillColor.R, teamFillColor.G, teamFillColor.B},
+        enemyOutlineColor = {enemyOutlineColor.R, enemyOutlineColor.G, enemyOutlineColor.B},
+        enemyFillColor = {enemyFillColor.R, enemyFillColor.G, enemyFillColor.B},
+        nicknameColor = {nicknameColor.R, nicknameColor.G, nicknameColor.B},
+        
+        -- Skeleton
+        skeletonEnabled = skeletonEnabled,
+        skeletonColor = {skeletonColor.R, skeletonColor.G, skeletonColor.B},
+        
+        -- Combat
+        hitboxEnabled = hitboxEnabled,
+        hitboxSize = hitboxSize,
+        
+        -- Aimbot
+        aimbotEnabled = aimbotEnabled,
+        aimbotKey = tostring(aimbotKey),
+        aimbotMode = aimbotMode,
+        aimbotTargetPart = aimbotTargetPart,
+        aimbotTeamCheck = aimbotTeamCheck,
+        aimbotFOV = aimbotFOV,
+        aimbotFOVColor = {aimbotFOVColor.R, aimbotFOVColor.G, aimbotFOVColor.B},
+        aimbotFOVVisible = aimbotFOVVisible,
+        
+        -- Movement
+        infiniteJumpEnabled = infiniteJumpEnabled,
+        walkSpeed = walkSpeed,
+        
+        -- Visual Effects
+        noFogEnabled = noFogEnabled,
+        noShadowsEnabled = noShadowsEnabled,
+        fullBrightEnabled = fullBrightEnabled,
+        
+        -- Watermark
+        watermarkEnabled = watermarkEnabled,
+        watermarkColor = {watermarkColor.R, watermarkColor.G, watermarkColor.B},
+        watermarkPosition = {watermarkPosition.X.Scale, watermarkPosition.X.Offset, watermarkPosition.Y.Scale, watermarkPosition.Y.Offset}
+    }
+    
+    return game:GetService("HttpService"):JSONEncode(config)
+end
+
+function LoadConfig(jsonString)
+    if not jsonString or jsonString == "" then return false end
+    
+    local data = game:GetService("HttpService"):JSONDecode(jsonString)
+    if not data then return false end
+    
+    -- Ratio
+    if data.currentRatio then
+        currentRatio = data.currentRatio
+    end
+    
+    -- ESP Settings
+    espEnabled = data.espEnabled or false
+    teamCheckEnabled = data.teamCheckEnabled or false
+    showOutline = data.showOutline or false
+    showFill = data.showFill or false
+    showNicknames = data.showNicknames or false
+    showHealth = data.showHealth or false
+    
+    -- ESP Colors
+    if data.teamOutlineColor then
+        teamOutlineColor = Color3.new(data.teamOutlineColor[1], data.teamOutlineColor[2], data.teamOutlineColor[3])
+    end
+    if data.teamFillColor then
+        teamFillColor = Color3.new(data.teamFillColor[1], data.teamFillColor[2], data.teamFillColor[3])
+    end
+    if data.enemyOutlineColor then
+        enemyOutlineColor = Color3.new(data.enemyOutlineColor[1], data.enemyOutlineColor[2], data.enemyOutlineColor[3])
+    end
+    if data.enemyFillColor then
+        enemyFillColor = Color3.new(data.enemyFillColor[1], data.enemyFillColor[2], data.enemyFillColor[3])
+    end
+    if data.nicknameColor then
+        nicknameColor = Color3.new(data.nicknameColor[1], data.nicknameColor[2], data.nicknameColor[3])
+    end
+    
+    -- Skeleton
+    if data.skeletonEnabled ~= nil then
+        skeletonEnabled = data.skeletonEnabled
+    end
+    if data.skeletonColor then
+        skeletonColor = Color3.new(data.skeletonColor[1], data.skeletonColor[2], data.skeletonColor[3])
+    end
+    
+    -- Combat
+    if data.hitboxEnabled ~= nil then
+        hitboxEnabled = data.hitboxEnabled
+    end
+    if data.hitboxSize then
+        hitboxSize = data.hitboxSize
+    end
+    
+    -- Aimbot
+    if data.aimbotEnabled ~= nil then
+        aimbotEnabled = data.aimbotEnabled
+    end
+    if data.aimbotKey then
+        pcall(function()
+            aimbotKey = Enum.KeyCode[data.aimbotKey]
+        end)
+    end
+    if data.aimbotMode then
+        aimbotMode = data.aimbotMode
+    end
+    if data.aimbotTargetPart then
+        aimbotTargetPart = data.aimbotTargetPart
+    end
+    if data.aimbotTeamCheck ~= nil then
+        aimbotTeamCheck = data.aimbotTeamCheck
+    end
+    if data.aimbotFOV then
+        aimbotFOV = data.aimbotFOV
+    end
+    if data.aimbotFOVColor then
+        aimbotFOVColor = Color3.new(data.aimbotFOVColor[1], data.aimbotFOVColor[2], data.aimbotFOVColor[3])
+    end
+    if data.aimbotFOVVisible ~= nil then
+        aimbotFOVVisible = data.aimbotFOVVisible
+    end
+    
+    -- Movement
+    if data.infiniteJumpEnabled ~= nil then
+        infiniteJumpEnabled = data.infiniteJumpEnabled
+    end
+    if data.walkSpeed then
+        walkSpeed = data.walkSpeed
+    end
+    
+    -- Visual Effects
+    if data.noFogEnabled ~= nil then
+        noFogEnabled = data.noFogEnabled
+    end
+    if data.noShadowsEnabled ~= nil then
+        noShadowsEnabled = data.noShadowsEnabled
+    end
+    if data.fullBrightEnabled ~= nil then
+        fullBrightEnabled = data.fullBrightEnabled
+    end
+    
+    -- Watermark
+    if data.watermarkEnabled ~= nil then
+        watermarkEnabled = data.watermarkEnabled
+    end
+    if data.watermarkColor then
+        watermarkColor = Color3.new(data.watermarkColor[1], data.watermarkColor[2], data.watermarkColor[3])
+    end
+    if data.watermarkPosition then
+        watermarkPosition = UDim2.new(
+            data.watermarkPosition[1],
+            data.watermarkPosition[2],
+            data.watermarkPosition[3],
+            data.watermarkPosition[4]
+        )
+    end
+    
+    -- Apply all settings
+    if espEnabled then
+        StartESPRefresh()
+    else
+        StopESPRefresh()
+        ClearESP()
+    end
+    
+    if skeletonEnabled then
+        StartSkeletonESP()
+    else
+        StopSkeletonESP()
+    end
+    
+    if hitboxEnabled then
+        ToggleHitbox(true)
+    else
+        ToggleHitbox(false)
+    end
+    
+    if aimbotEnabled then
+        ToggleAimbot(true)
+    else
+        ToggleAimbot(false)
+    end
+    
+    if watermarkEnabled then
+        ToggleWatermark(true)
+    else
+        ToggleWatermark(false)
+    end
+    
+    if noFogEnabled then
+        ToggleNoFog(true)
+    else
+        ToggleNoFog(false)
+    end
+    
+    if noShadowsEnabled then
+        ToggleNoShadows(true)
+    else
+        ToggleNoShadows(false)
+    end
+    
+    if fullBrightEnabled then
+        ToggleFullBright(true)
+    else
+        ToggleFullBright(false)
+    end
+    
+    SetWalkSpeed(walkSpeed)
+    
+    RefreshESPNOW()
+    UpdateAimbotFOV()
+    UpdateWatermarkSize()
+    
+    return true
+end
+
+-- ==================== CONFIG EDITOR GUI ====================
+function ToggleConfigEditor(state)
+    configEditorVisible = state
+    
+    if state then
+        if configEditorGui then
+            configEditorGui:Destroy()
+            configEditorGui = nil
+        end
+        
+        configEditorGui = Instance.new("ScreenGui")
+        configEditorGui.Name = "ConfigEditor"
+        configEditorGui.Parent = game.CoreGui
+        configEditorGui.ResetOnSpawn = false
+        
+        configEditorFrame = Instance.new("Frame")
+        configEditorFrame.Name = "ConfigEditorFrame"
+        configEditorFrame.Parent = configEditorGui
+        configEditorFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+        configEditorFrame.BorderSizePixel = 0
+        configEditorFrame.Size = UDim2.new(0, 500, 0, 400)
+        configEditorFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
+        configEditorFrame.Active = true
+        configEditorFrame.Draggable = true
+        
+        local frameCorner = Instance.new("UICorner")
+        frameCorner.CornerRadius = UDim.new(0, 8)
+        frameCorner.Parent = configEditorFrame
+        
+        -- Title
+        local title = Instance.new("TextLabel")
+        title.Parent = configEditorFrame
+        title.Size = UDim2.new(1, 0, 0, 40)
+        title.Position = UDim2.new(0, 0, 0, 0)
+        title.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+        title.BorderSizePixel = 0
+        title.Text = "Config Editor"
+        title.TextColor3 = Color3.fromRGB(220, 220, 230)
+        title.TextSize = 20
+        title.Font = Enum.Font.GothamBold
+        
+        local titleCorner = Instance.new("UICorner")
+        titleCorner.CornerRadius = UDim.new(0, 8)
+        titleCorner.Parent = title
+        
+        -- Close button
+        local closeBtn = Instance.new("TextButton")
+        closeBtn.Parent = configEditorFrame
+        closeBtn.Size = UDim2.new(0, 30, 0, 30)
+        closeBtn.Position = UDim2.new(1, -40, 0, 5)
+        closeBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+        closeBtn.BorderSizePixel = 0
+        closeBtn.Text = "X"
+        closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        closeBtn.TextSize = 16
+        closeBtn.Font = Enum.Font.GothamBold
+        closeBtn.MouseButton1Click:Connect(function()
+            ToggleConfigEditor(false)
+        end)
+        
+        local closeCorner = Instance.new("UICorner")
+        closeCorner.CornerRadius = UDim.new(0, 4)
+        closeCorner.Parent = closeBtn
+        
+        -- Status label
+        configStatusLabel = Instance.new("TextLabel")
+        configStatusLabel.Parent = configEditorFrame
+        configStatusLabel.Size = UDim2.new(0.9, 0, 0, 30)
+        configStatusLabel.Position = UDim2.new(0.05, 0, 0.12, 0)
+        configStatusLabel.BackgroundTransparency = 1
+        configStatusLabel.Text = "Ready"
+        configStatusLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
+        configStatusLabel.TextSize = 14
+        configStatusLabel.Font = Enum.Font.Gotham
+        configStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        
+        -- Save Config Button
+        local saveBtn = Instance.new("TextButton")
+        saveBtn.Parent = configEditorFrame
+        saveBtn.Size = UDim2.new(0, 120, 0, 40)
+        saveBtn.Position = UDim2.new(0.05, 0, 0.2, 0)
+        saveBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+        saveBtn.BorderSizePixel = 0
+        saveBtn.Text = "Save Config"
+        saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        saveBtn.TextSize = 14
+        saveBtn.Font = Enum.Font.GothamBold
+        saveBtn.MouseButton1Click:Connect(function()
+            local config = GetCurrentConfig()
+            configTextbox.Text = config
+            configStatusLabel.Text = "✅ Config generated! Copy it manually."
+            configStatusLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
+        end)
+        
+        local saveCorner = Instance.new("UICorner")
+        saveCorner.CornerRadius = UDim.new(0, 4)
+        saveCorner.Parent = saveBtn
+        
+        -- Load Config Button
+        local loadBtn = Instance.new("TextButton")
+        loadBtn.Parent = configEditorFrame
+        loadBtn.Size = UDim2.new(0, 120, 0, 40)
+        loadBtn.Position = UDim2.new(0.05, 0, 0.3, 0)
+        loadBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
+        loadBtn.BorderSizePixel = 0
+        loadBtn.Text = "Load Config"
+        loadBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        loadBtn.TextSize = 14
+        loadBtn.Font = Enum.Font.GothamBold
+        loadBtn.MouseButton1Click:Connect(function()
+            local json = configTextbox.Text
+            if json and json ~= "" then
+                local success = LoadConfig(json)
+                if success then
+                    configStatusLabel.Text = "✅ Config loaded successfully!"
+                    configStatusLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
+                else
+                    configStatusLabel.Text = "❌ Invalid config! Check the format."
+                    configStatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+                end
+            else
+                configStatusLabel.Text = "❌ Paste a config first!"
+                configStatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+            end
+        end)
+        
+        local loadCorner = Instance.new("UICorner")
+        loadCorner.CornerRadius = UDim.new(0, 4)
+        loadCorner.Parent = loadBtn
+        
+        -- Config Textbox
+        configTextbox = Instance.new("TextBox")
+        configTextbox.Parent = configEditorFrame
+        configTextbox.Size = UDim2.new(0.9, 0, 0.45, 0)
+        configTextbox.Position = UDim2.new(0.05, 0, 0.4, 0)
+        configTextbox.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+        configTextbox.BorderSizePixel = 0
+        configTextbox.Text = ""
+        configTextbox.TextColor3 = Color3.fromRGB(180, 180, 190)
+        configTextbox.TextSize = 12
+        configTextbox.Font = Enum.Font.Code
+        configTextbox.TextWrapped = true
+        configTextbox.TextXAlignment = Enum.TextXAlignment.Left
+        configTextbox.TextYAlignment = Enum.TextYAlignment.Top
+        configTextbox.MultiLine = true
+        configTextbox.ClearTextOnFocus = false
+        
+        local textboxCorner = Instance.new("UICorner")
+        textboxCorner.CornerRadius = UDim.new(0, 4)
+        textboxCorner.Parent = configTextbox
+    else
+        if configEditorGui then
+            configEditorGui:Destroy()
+            configEditorGui = nil
+            configEditorFrame = nil
+            configTextbox = nil
+            configStatusLabel = nil
+        end
     end
 end
 
@@ -453,7 +1111,6 @@ local HitboxSection = CombatTab:Section({
     text = "Hitbox Expander"
 })
 
--- Dropdown z wartościami 1-10
 local hitboxValues = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}
 
 HitboxSection:Dropdown({
@@ -470,6 +1127,132 @@ HitboxSection:Toggle({
     state = false,
     callback = function(state)
         ToggleHitbox(state)
+    end
+})
+
+-- ==================== AIMBOT SECTION ====================
+local AimbotSection = CombatTab:Section({
+    text = "Aimbot"
+})
+
+AimbotSection:Toggle({
+    text = "Aimbot",
+    state = false,
+    callback = function(state)
+        ToggleAimbot(state)
+    end
+})
+
+local keyOptions = {"E", "Q", "R", "T", "F", "G", "C", "X", "Z", "V", "LeftControl", "RightControl", "LeftShift", "RightShift", "MouseButton1", "MouseButton2"}
+AimbotSection:Dropdown({
+    text = "Activation Key",
+    list = keyOptions,
+    default = "E",
+    callback = function(selected)
+        if selected == "LeftControl" then
+            aimbotKey = Enum.KeyCode.LeftControl
+        elseif selected == "RightControl" then
+            aimbotKey = Enum.KeyCode.RightControl
+        elseif selected == "LeftShift" then
+            aimbotKey = Enum.KeyCode.LeftShift
+        elseif selected == "RightShift" then
+            aimbotKey = Enum.KeyCode.RightShift
+        elseif selected == "MouseButton1" then
+            aimbotKey = Enum.UserInputType.MouseButton1
+        elseif selected == "MouseButton2" then
+            aimbotKey = Enum.UserInputType.MouseButton2
+        else
+            aimbotKey = Enum.KeyCode[selected]
+        end
+    end
+})
+
+AimbotSection:Dropdown({
+    text = "Mode",
+    list = {"Toggle", "Hold"},
+    default = "Toggle",
+    callback = function(selected)
+        aimbotMode = selected
+    end
+})
+
+AimbotSection:Dropdown({
+    text = "Target Part",
+    list = {"Head", "Torso"},
+    default = "Head",
+    callback = function(selected)
+        if selected == "Head" then
+            aimbotTargetPart = "Head"
+        else
+            aimbotTargetPart = "HumanoidRootPart"
+        end
+    end
+})
+
+AimbotSection:Toggle({
+    text = "Team Check",
+    state = false,
+    callback = function(state)
+        aimbotTeamCheck = state
+    end
+})
+
+local fovValues = {"10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "120", "130", "140", "150"}
+AimbotSection:Dropdown({
+    text = "FOV Size",
+    list = fovValues,
+    default = "80",
+    callback = function(selected)
+        aimbotFOV = tonumber(selected)
+        UpdateAimbotFOV()
+    end
+})
+
+AimbotSection:Colorpicker({
+    text = "FOV Color",
+    color = aimbotFOVColor,
+    callback = function(color)
+        aimbotFOVColor = color
+        UpdateAimbotFOV()
+    end
+})
+
+AimbotSection:Toggle({
+    text = "Show FOV",
+    state = false,
+    callback = function(state)
+        aimbotFOVVisible = state
+        UpdateAimbotFOV()
+    end
+})
+
+-- ==================== MOVEMENT TAB ====================
+local MovementTab = TabSection:Tab({
+    text = "Movement",
+    icon = "rbxassetid://7999345313",
+})
+
+local MovementSection = MovementTab:Section({
+    text = "Movement Options"
+})
+
+-- WalkSpeed Dropdown
+local walkSpeedValues = {"10", "20", "30", "40", "50", "60", "70", "80", "90", "100"}
+MovementSection:Dropdown({
+    text = "WalkSpeed",
+    list = walkSpeedValues,
+    default = "16",
+    callback = function(selected)
+        SetWalkSpeed(tonumber(selected))
+    end
+})
+
+-- Infinite Jump Toggle
+MovementSection:Toggle({
+    text = "Infinite Jump",
+    state = false,
+    callback = function(state)
+        ToggleInfiniteJump(state)
     end
 })
 
@@ -694,7 +1477,6 @@ function CreatePlayerESP(targetPlayer)
     local outlineColor = isTeam and teamOutlineColor or enemyOutlineColor
     local fillColor = isTeam and teamFillColor or enemyFillColor
     
-    -- Highlight (GLOW)
     local highlight = Instance.new("Highlight")
     highlight.Adornee = targetPlayer.Character
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
@@ -704,7 +1486,6 @@ function CreatePlayerESP(targetPlayer)
     highlight.OutlineTransparency = showOutline and 0.3 or 1
     highlight.Parent = targetPlayer.Character
     
-    -- Name Tag
     local nameTag = nil
     if showNicknames then
         nameTag = Instance.new("BillboardGui")
@@ -726,7 +1507,6 @@ function CreatePlayerESP(targetPlayer)
         nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     end
     
-    -- Health Bar
     local healthBar = nil
     local healthConnection = nil
     if showHealth then
@@ -943,6 +1723,19 @@ local MiscTab = TabSection:Tab({
     icon = "rbxassetid://7999345313",
 })
 
+-- ==================== CONFIG EDITOR ====================
+local ConfigSection = MiscTab:Section({
+    text = "Config Editor"
+})
+
+ConfigSection:Toggle({
+    text = "Config Editor",
+    state = false,
+    callback = function(state)
+        ToggleConfigEditor(state)
+    end
+})
+
 -- ==================== WATERMARK SECTION ====================
 local MiscSection = MiscTab:Section({
     text = "Watermark"
@@ -1009,7 +1802,6 @@ local MiscOptionsSection = MiscTab:Section({
     text = "Misc Options"
 })
 
--- Unload
 MiscOptionsSection:Button({
     text = "Unload",
     callback = function()
@@ -1025,6 +1817,10 @@ MiscOptionsSection:Button({
         ToggleNoFog(false)
         ToggleNoShadows(false)
         ToggleFullBright(false)
+        ToggleAimbot(false)
+        ToggleInfiniteJump(false)
+        SetWalkSpeed(16)
+        ToggleConfigEditor(false)
         
         for _, connection in ipairs(connections) do
             pcall(function() connection:Disconnect() end)
@@ -1033,10 +1829,17 @@ MiscOptionsSection:Button({
         ratioConnection = nil
         skeletonRenderConnection = nil
         hitboxConnection = nil
+        aimbotConnection = nil
+        aimbotRenderConnection = nil
+        
+        if aimbotFOVCircle then
+            aimbotFOVCircle:Remove()
+            aimbotFOVCircle = nil
+        end
         
         pcall(function()
             for _, v in pairs(game.CoreGui:GetChildren()) do
-                if v:IsA("ScreenGui") and (v.Name == "Neverlose" or v.Name == "Watermark") then
+                if v:IsA("ScreenGui") and (v.Name == "Neverlose" or v.Name == "Watermark" or v.Name == "ConfigEditor") then
                     v:Destroy()
                 end
             end
@@ -1055,4 +1858,9 @@ local rightShiftConnection = game:GetService("UserInputService").InputBegan:Conn
 end)
 table.insert(connections, rightShiftConnection)
 
-print("lupica3-univ injected")
+-- Uruchom movement
+SetupInfiniteJump()
+SetupWalkSpeed()
+
+print("lupica3-univ l
+injected")
