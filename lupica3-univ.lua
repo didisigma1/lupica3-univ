@@ -1,6 +1,6 @@
 --[[
     Script: lupica3-univ
-    Author: lupica3
+    Author: lupica3 - me
     Date: 2026
 ]]
 
