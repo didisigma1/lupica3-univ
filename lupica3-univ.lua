@@ -5,7 +5,7 @@
 ]]
 
 -- Load library
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/didisigma1/lupica3-univ/refs/heads/main/lib.lua"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/didisigma1/lupica3-univ/refs/heads/main/lupica3-univ-lib.lua"))()
 
 -- Variables
 local connections = {}
