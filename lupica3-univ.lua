@@ -1862,5 +1862,4 @@ table.insert(connections, rightShiftConnection)
 SetupInfiniteJump()
 SetupWalkSpeed()
 
-print("lupica3-univ l
-injected")
+print("lupica3-univ injected")
