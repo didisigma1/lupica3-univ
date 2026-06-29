@@ -1,12 +1,7 @@
-# lupica3 univ
+# lupica3 scripts
 
-Universal Roblox Script with ESP, Skeleton, and Visual Mods
-
-
-## Overview
-
-lupica3-univ is a clean and lightweight Roblox script featuring a modern UI with customizable ESP, skeleton rendering, and visual enhancements. Built with the Neverlose UI library.
-
+- lupica3-univ
+- lup3shootout (Cali Shootout)
 
 ## Installation
 
